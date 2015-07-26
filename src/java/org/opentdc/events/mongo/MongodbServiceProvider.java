@@ -23,19 +23,16 @@
  */
 package org.opentdc.events.mongo;
 
-import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 import java.util.logging.Logger;
 
 import javax.servlet.ServletContext;
 
-import org.opentdc.file.AbstractFileServiceProvider;
+import org.bson.Document;
+import org.bson.types.ObjectId;
+import org.opentdc.mongo.AbstractMongodbServiceProvider;
 import org.opentdc.events.EventModel;
 import org.opentdc.events.InvitationState;
 import org.opentdc.events.SalutationType;
@@ -51,30 +48,62 @@ import org.opentdc.util.PrettyPrinter;
  * @author Bruno Kaiser
  *
  */
-public class MongodbServiceProvider extends AbstractMongodbServiceProvider<EventModel> implements ServiceProvider {
+public class MongodbServiceProvider 
+	extends AbstractMongodbServiceProvider<EventModel> 
+	implements ServiceProvider 
+{
 	
-	private static Map<String, EventModel> index = null;
 	private static final Logger logger = Logger.getLogger(MongodbServiceProvider.class.getName());
 
 	/**
 	 * Constructor.
 	 * @param context the servlet context.
-	 * @param prefix the simple class name of the service provider
-	 * @throws IOException
+	 * @param prefix the simple class name of the service provider; this is also used as the collection name.
 	 */
-	public FileServiceProvider(
+	public MongodbServiceProvider(
 		ServletContext context, 
-		String prefix
-	) throws IOException {
-		super(context, prefix);
-		if (index == null) {
-			index = new HashMap<String, EventModel>();
-			List<EventModel> _events = importJson();
-			for (EventModel _event : _events) {
-				index.put(_event.getId(), _event);
-			}
-			logger.info(_events.size() + " Events imported.");
+		String prefix) 
+	{
+		super(context);
+		connect();
+		collectionName = prefix;
+		getCollection(collectionName);
+		logger.info("MongodbServiceProvider(context, " + prefix + ") -> OK");
+	}
+	
+	private Document convert(EventModel eventModel, boolean withId) 
+	{
+		Document _doc = new Document("firstName", eventModel.getFirstName())
+			.append("lastName", eventModel.getLastName())
+			.append("email", eventModel.getEmail())
+			.append("comment", eventModel.getComment())
+			.append("salutation", eventModel.getSalutation().toString())
+			.append("invitationState", eventModel.getInvitationState().toString())
+			.append("createdAt", eventModel.getCreatedAt())
+			.append("createdBy", eventModel.getCreatedBy())
+			.append("modifiedAt", eventModel.getModifiedAt())
+			.append("modifiedBy", eventModel.getModifiedBy());
+		if (withId == true) {
+			_doc.append("_id", new ObjectId(eventModel.getId()));
 		}
+		return _doc;
+	}
+	
+	private EventModel convert(Document doc)
+	{
+		EventModel _model = new EventModel();
+		_model.setId(doc.getObjectId("_id").toString());
+		_model.setFirstName(doc.getString("firstName"));
+		_model.setLastName(doc.getString("lastName"));
+		_model.setEmail(doc.getString("email"));
+		_model.setComment(doc.getString("comment"));
+		_model.setSalutation(SalutationType.valueOf(doc.getString("salutation")));
+		_model.setInvitationState(InvitationState.valueOf(doc.getString("invitationState")));
+		_model.setCreatedAt(doc.getDate("createdAt"));
+		_model.setCreatedBy(doc.getString("createdBy"));
+		_model.setModifiedAt(doc.getDate("modifiedAt"));
+		_model.setModifiedBy(doc.getString("modifiedBy"));
+		return _model;
 	}
 
 	/* (non-Javadoc)
@@ -85,15 +114,11 @@ public class MongodbServiceProvider extends AbstractMongodbServiceProvider<Event
 		String queryType,
 		String query,
 		int position,
-		int size
-	) {
-		ArrayList<EventModel> _events = new ArrayList<EventModel>(index.values());
-		Collections.sort(_events, EventModel.EventComparator);
+		int size) {
+		List<Document> _docs = list(position, size);
 		ArrayList<EventModel> _selection = new ArrayList<EventModel>();
-		for (int i = 0; i < _events.size(); i++) {
-			if (i >= position && i < (position + size)) {
-				_selection.add(_events.get(i));
-			}			
+		for (Document doc : _docs) {
+			_selection.add(convert(doc));
 		}
 		logger.info("list(<" + query + ">, <" + queryType + 
 				">, <" + position + ">, <" + size + ">) -> " + _selection.size() + " events.");
@@ -108,49 +133,35 @@ public class MongodbServiceProvider extends AbstractMongodbServiceProvider<Event
 		EventModel event) 
 	throws DuplicateException, ValidationException {
 		logger.info("create(" + PrettyPrinter.prettyPrintAsJSON(event) + ")");
-		String _id = event.getId();
-		if (_id == null || _id == "") {
-			_id = UUID.randomUUID().toString();
-		} else {
-			if (index.get(_id) != null) {
-				// object with same ID exists already
-				throw new DuplicateException("event <" + _id + "> exists already.");
-			}
-			else { 	// a new ID was set on the client; we do not allow this
-				throw new ValidationException("event <" + _id + 
-					"> contains an ID generated on the client. This is not allowed.");
-			}
+		if (event.getId() != null && !event.getId().isEmpty()) {
+			throw new ValidationException("event <" + event.getId() + "> contains an id generated on the client.");
 		}
 		// enforce mandatory fields
 		if (event.getFirstName() == null || event.getFirstName().length() == 0) {
-			throw new ValidationException("event <" + _id + 
-					"> must contain a valid firstName.");
+			throw new ValidationException("event must contain a valid firstName.");
 		}
 		if (event.getLastName() == null || event.getLastName().length() == 0) {
-			throw new ValidationException("event <" + _id + 
-					"> must contain a valid lastName.");
+			throw new ValidationException("event must contain a valid lastName.");
 		}
 		if (event.getEmail() == null || event.getEmail().length() == 0) {
-			throw new ValidationException("event <" + _id + 
-					"> must contain a valid email address.");
+			throw new ValidationException("event must contain a valid email address.");
 		}
+		// set default values
 		if (event.getInvitationState() == null) {
 			event.setInvitationState(InvitationState.INITIAL);
 		}
 		if (event.getSalutation() == null) {
 			event.setSalutation(SalutationType.DU_M);
 		}
-		event.setId(_id);
+		// set modification / creation values
 		Date _date = new Date();
 		event.setCreatedAt(_date);
 		event.setCreatedBy(getPrincipal());
 		event.setModifiedAt(_date);
 		event.setModifiedBy(getPrincipal());
-		index.put(_id, event);
+		
+		create(convert(event, false));
 		logger.info("create(" + PrettyPrinter.prettyPrintAsJSON(event) + ")");
-		if (isPersistent) {
-			exportJson(index.values());
-		}
 		return event;
 	}
 
@@ -161,7 +172,7 @@ public class MongodbServiceProvider extends AbstractMongodbServiceProvider<Event
 	public EventModel read(
 		String id) 
 	throws NotFoundException {
-		EventModel _event = index.get(id);
+		EventModel _event = convert(readOne(id));
 		if (_event == null) {
 			throw new NotFoundException("no event with ID <" + id
 					+ "> was found.");
@@ -178,11 +189,7 @@ public class MongodbServiceProvider extends AbstractMongodbServiceProvider<Event
 		String id, 
 		EventModel event
 	) throws NotFoundException, ValidationException {
-		EventModel _event = index.get(id);
-		if(_event == null) {
-			throw new NotFoundException("no event with ID <" + id
-					+ "> was found.");
-		} 
+		EventModel _event = read(id);
 		if (! _event.getCreatedAt().equals(event.getCreatedAt())) {
 			logger.warning("event <" + id + ">: ignoring createdAt value <" + event.getCreatedAt().toString() + 
 					"> because it was set on the client.");
@@ -217,11 +224,8 @@ public class MongodbServiceProvider extends AbstractMongodbServiceProvider<Event
 		_event.setComment(event.getComment());
 		_event.setModifiedAt(new Date());
 		_event.setModifiedBy(getPrincipal());
-		index.put(id, _event);
+		update(id, convert(_event, true));
 		logger.info("update(" + id + ") -> " + PrettyPrinter.prettyPrintAsJSON(_event));
-		if (isPersistent) {
-			exportJson(index.values());
-		}
 		return _event;
 	}
 
@@ -232,18 +236,8 @@ public class MongodbServiceProvider extends AbstractMongodbServiceProvider<Event
 	public void delete(
 		String id) 
 	throws NotFoundException, InternalServerErrorException {
-		EventModel _event = index.get(id);
-		if (_event == null) {
-			throw new NotFoundException("event <" + id
-					+ "> was not found.");
-		}
-		if (index.remove(id) == null) {
-			throw new InternalServerErrorException("event <" + id
-					+ "> can not be removed, because it does not exist in the index");
-		}
-		logger.info("delete(" + id + ")");
-		if (isPersistent) {
-			exportJson(index.values());
-		}
+		read(id);
+		deleteOne(id);
+		logger.info("delete(" + id + ") -> OK");
 	}
 }
