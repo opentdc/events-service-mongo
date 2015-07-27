@@ -25,7 +25,9 @@ package org.opentdc.events.mongo;
 
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Logger;
 
 import javax.servlet.ServletContext;
@@ -41,7 +43,11 @@ import org.opentdc.service.exception.DuplicateException;
 import org.opentdc.service.exception.InternalServerErrorException;
 import org.opentdc.service.exception.NotFoundException;
 import org.opentdc.service.exception.ValidationException;
+import org.opentdc.util.EmailSender;
+import org.opentdc.util.FreeMarkerConfig;
 import org.opentdc.util.PrettyPrinter;
+
+import freemarker.template.Template;
 
 /**
  * A MongoDB-based implementation of the Events service.
@@ -52,8 +58,9 @@ public class MongodbServiceProvider
 	extends AbstractMongodbServiceProvider<EventModel> 
 	implements ServiceProvider 
 {
-	
 	private static final Logger logger = Logger.getLogger(MongodbServiceProvider.class.getName());
+	private EmailSender emailSender = null;
+	private static final String SUBJECT = "Einladung zum Arbalo Launch Event";
 
 	/**
 	 * Constructor.
@@ -68,6 +75,8 @@ public class MongodbServiceProvider
 		connect();
 		collectionName = prefix;
 		getCollection(collectionName);
+		new FreeMarkerConfig(context);
+		emailSender = new EmailSender(context);
 		logger.info("MongodbServiceProvider(context, " + prefix + ") -> OK");
 	}
 	
@@ -77,6 +86,7 @@ public class MongodbServiceProvider
 			.append("lastName", eventModel.getLastName())
 			.append("email", eventModel.getEmail())
 			.append("comment", eventModel.getComment())
+			.append("contact",  eventModel.getContact())
 			.append("salutation", eventModel.getSalutation().toString())
 			.append("invitationState", eventModel.getInvitationState().toString())
 			.append("createdAt", eventModel.getCreatedAt())
@@ -97,6 +107,7 @@ public class MongodbServiceProvider
 		_model.setLastName(doc.getString("lastName"));
 		_model.setEmail(doc.getString("email"));
 		_model.setComment(doc.getString("comment"));
+		_model.setContact(doc.getString("contact"));
 		_model.setSalutation(SalutationType.valueOf(doc.getString("salutation")));
 		_model.setInvitationState(InvitationState.valueOf(doc.getString("invitationState")));
 		_model.setCreatedAt(doc.getDate("createdAt"));
@@ -219,6 +230,7 @@ public class MongodbServiceProvider
 		_event.setFirstName(event.getFirstName());
 		_event.setLastName(event.getLastName());
 		_event.setEmail(event.getEmail());
+		_event.setContact(event.getContact());
 		_event.setSalutation(event.getSalutation());
 		_event.setInvitationState(event.getInvitationState());
 		_event.setComment(event.getComment());
@@ -239,5 +251,118 @@ public class MongodbServiceProvider
 		read(id);
 		deleteOne(id);
 		logger.info("delete(" + id + ") -> OK");
+	}
+
+	/* (non-Javadoc)
+	 * @see org.opentdc.events.ServiceProvider#getMessage(java.lang.String)
+	 */
+	@Override
+	public String getMessage(String id) throws NotFoundException,
+			InternalServerErrorException {
+		logger.info("getMessage(" + id + ")");
+		EventModel _model = read(id);
+		
+		// create the FreeMarker data model
+        Map<String, Object> _root = new HashMap<String, Object>();    
+        _root.put("event", _model);
+        
+        // Merge data model with template   
+        String _msg = FreeMarkerConfig.getProcessedTemplate(
+        		_root, 
+        		getTemplate(_model.getSalutation(), _model.getContact()));
+		logger.info("getMessage(" + id + ") -> " + _msg);
+		return _msg;
+	}
+	
+	/**
+	 * Retrieve the email address of the contact.
+	 * @param userName the name of the contact
+	 * @return the corresponding email address
+	 */
+	private String getEmailAddress(String userName) {
+		logger.info("getEmailAddress(" + userName + ")");
+		String _emailAddress = null;
+		if (userName == null || userName.isEmpty()) {
+			userName = "arbalo";
+		}
+	       if (userName.equalsIgnoreCase("bruno")) {
+	        	_emailAddress = "bruno.kaiser@arbalo.ch";
+	        } else if (userName.equalsIgnoreCase("thomas")) {
+	        	_emailAddress = "thomas.huber@arbalo.ch";
+	        } else if (userName.equalsIgnoreCase("peter")) {
+	        	_emailAddress = "peter.windemann@arbalo.ch";
+	        } else if (userName.equalsIgnoreCase("marc")) {
+	        	_emailAddress = "marc.hofer@arbalo.ch";
+	        } else if (userName.equalsIgnoreCase("werner")) {
+	        	_emailAddress = "werner.froidevaux@arbalo.ch";        	
+	        } else {
+	        	_emailAddress = "info@arbalo.ch";        	        	
+	        }
+	        logger.info("getEmailAddress(" + userName + ") -> " + _emailAddress);
+	        return _emailAddress;	
+	}
+	
+	/**
+	 * @param salutation
+	 * @return
+	 */
+	private Template getTemplate(
+			SalutationType salutation, String userName) {
+		String _templateName = null;
+		if (userName == null || userName.isEmpty()) {
+			userName = "arbalo";
+		}
+		switch (salutation) {
+		case HERR: _templateName = "emailHerr_" + userName + ".ftl"; break;
+		case FRAU: _templateName = "emailFrau_" + userName + ".ftl"; break;
+		case DU_F: _templateName = "emailDuf_" + userName + ".ftl";  break;
+		case DU_M: _templateName = "emailDum_" + userName + ".ftl";  break;
+		}
+		return FreeMarkerConfig.getTemplateByName(_templateName);
+	}
+
+	/* (non-Javadoc)
+	 * @see org.opentdc.events.ServiceProvider#sendMessage(java.lang.String)
+	 */
+	@Override
+	public void sendMessage(
+			String id) 
+			throws NotFoundException, InternalServerErrorException {
+		logger.info("sendMessage(" + id + ")");
+		EventModel _model = read(id);
+
+		emailSender.sendMessage(
+			_model.getEmail(),
+			getEmailAddress(_model.getContact()),
+			SUBJECT,
+			getMessage(id));
+		logger.info("sent email message to " + _model.getEmail());
+		_model.setId(null);
+		_model.setInvitationState(InvitationState.SENT);
+		update(id, _model);
+	}
+
+	/* (non-Javadoc)
+	 * @see org.opentdc.events.ServiceProvider#sendAllMessages()
+	 */
+	@Override
+	public void sendAllMessages() 
+			throws InternalServerErrorException {
+		logger.info("sendAllMessages()");
+		EventModel _model = null;
+		String _id = null;
+		for (Document doc : list(0, 200)) {
+			_model = convert(doc);
+			_id = _model.getId();
+			emailSender.sendMessage(
+				_model.getEmail(),
+				getEmailAddress(_model.getContact()),
+				SUBJECT,
+				getMessage(_id));
+			logger.info("sent email message to " + _model.getEmail());
+			_model.setId(null);
+			_model.setInvitationState(InvitationState.SENT);
+			update(_id, _model);
+		}
 	}
 }
