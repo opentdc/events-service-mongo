@@ -86,6 +86,7 @@ public class MongodbServiceProvider
 			.append("lastName", eventModel.getLastName())
 			.append("email", eventModel.getEmail())
 			.append("comment", eventModel.getComment())
+			.append("internalComment", eventModel.getInternalComment())
 			.append("contact",  eventModel.getContact())
 			.append("salutation", eventModel.getSalutation().toString())
 			.append("invitationState", eventModel.getInvitationState().toString())
@@ -107,6 +108,7 @@ public class MongodbServiceProvider
 		_model.setLastName(doc.getString("lastName"));
 		_model.setEmail(doc.getString("email"));
 		_model.setComment(doc.getString("comment"));
+		_model.setComment(doc.getString("internalComment"));
 		_model.setContact(doc.getString("contact"));
 		_model.setSalutation(SalutationType.valueOf(doc.getString("salutation")));
 		_model.setInvitationState(InvitationState.valueOf(doc.getString("invitationState")));
@@ -147,6 +149,7 @@ public class MongodbServiceProvider
 		if (event.getId() != null && !event.getId().isEmpty()) {
 			throw new ValidationException("event <" + event.getId() + "> contains an id generated on the client.");
 		}
+		event.setId(new ObjectId().toString());
 		// enforce mandatory fields
 		if (event.getFirstName() == null || event.getFirstName().length() == 0) {
 			throw new ValidationException("event must contain a valid firstName.");
@@ -171,7 +174,7 @@ public class MongodbServiceProvider
 		event.setModifiedAt(_date);
 		event.setModifiedBy(getPrincipal());
 		
-		create(convert(event, false));
+		create(convert(event, true));
 		logger.info("create(" + PrettyPrinter.prettyPrintAsJSON(event) + ")");
 		return event;
 	}
@@ -363,6 +366,12 @@ public class MongodbServiceProvider
 			_model.setId(null);
 			_model.setInvitationState(InvitationState.SENT);
 			update(_id, _model);
+			try {
+				Thread.sleep(1000);
+			} catch (InterruptedException _ex) {
+				_ex.printStackTrace();
+				throw new InternalServerErrorException(_ex.getMessage());
+			}
 		}
 	}
 }
