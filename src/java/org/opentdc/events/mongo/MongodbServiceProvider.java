@@ -237,6 +237,7 @@ public class MongodbServiceProvider
 		_event.setSalutation(event.getSalutation());
 		_event.setInvitationState(event.getInvitationState());
 		_event.setComment(event.getComment());
+		_event.setInternalComment(event.getInternalComment());
 		_event.setModifiedAt(new Date());
 		_event.setModifiedBy(getPrincipal());
 		update(id, convert(_event, true));
