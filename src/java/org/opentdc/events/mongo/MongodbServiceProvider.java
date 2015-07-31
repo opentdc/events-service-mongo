@@ -280,29 +280,29 @@ public class MongodbServiceProvider
 	
 	/**
 	 * Retrieve the email address of the contact.
-	 * @param userName the name of the contact
+	 * @param contactName the name of the contact
 	 * @return the corresponding email address
 	 */
-	private String getEmailAddress(String userName) {
-		logger.info("getEmailAddress(" + userName + ")");
+	private String getEmailAddress(String contactName) {
+		logger.info("getEmailAddress(" + contactName + ")");
 		String _emailAddress = null;
-		if (userName == null || userName.isEmpty()) {
-			userName = "arbalo";
+		if (contactName == null || contactName.isEmpty()) {
+			contactName = "arbalo";
 		}
-	       if (userName.equalsIgnoreCase("bruno")) {
+	       if (contactName.equalsIgnoreCase("bruno")) {
 	        	_emailAddress = "bruno.kaiser@arbalo.ch";
-	        } else if (userName.equalsIgnoreCase("thomas")) {
+	        } else if (contactName.equalsIgnoreCase("thomas")) {
 	        	_emailAddress = "thomas.huber@arbalo.ch";
-	        } else if (userName.equalsIgnoreCase("peter")) {
+	        } else if (contactName.equalsIgnoreCase("peter")) {
 	        	_emailAddress = "peter.windemann@arbalo.ch";
-	        } else if (userName.equalsIgnoreCase("marc")) {
+	        } else if (contactName.equalsIgnoreCase("marc")) {
 	        	_emailAddress = "marc.hofer@arbalo.ch";
-	        } else if (userName.equalsIgnoreCase("werner")) {
+	        } else if (contactName.equalsIgnoreCase("werner")) {
 	        	_emailAddress = "werner.froidevaux@arbalo.ch";        	
 	        } else {
 	        	_emailAddress = "info@arbalo.ch";        	        	
 	        }
-	        logger.info("getEmailAddress(" + userName + ") -> " + _emailAddress);
+	        logger.info("getEmailAddress(" + contactName + ") -> " + _emailAddress);
 	        return _emailAddress;	
 	}
 	
@@ -311,16 +311,16 @@ public class MongodbServiceProvider
 	 * @return
 	 */
 	private Template getTemplate(
-			SalutationType salutation, String userName) {
+			SalutationType salutation, String contactName) {
 		String _templateName = null;
-		if (userName == null || userName.isEmpty()) {
-			userName = "arbalo";
+		if (contactName == null || contactName.isEmpty()) {
+			contactName = "arbalo";
 		}
 		switch (salutation) {
-		case HERR: _templateName = "emailHerr_" + userName + ".ftl"; break;
-		case FRAU: _templateName = "emailFrau_" + userName + ".ftl"; break;
-		case DU_F: _templateName = "emailDuf_" + userName + ".ftl";  break;
-		case DU_M: _templateName = "emailDum_" + userName + ".ftl";  break;
+		case HERR: _templateName = "emailHerr_" + contactName + ".ftl"; break;
+		case FRAU: _templateName = "emailFrau_" + contactName + ".ftl"; break;
+		case DU_F: _templateName = "emailDuf_" + contactName + ".ftl";  break;
+		case DU_M: _templateName = "emailDum_" + contactName + ".ftl";  break;
 		}
 		return FreeMarkerConfig.getTemplateByName(_templateName);
 	}
@@ -374,5 +374,50 @@ public class MongodbServiceProvider
 				throw new InternalServerErrorException(_ex.getMessage());
 			}
 		}
+	}
+
+	/* (non-Javadoc)
+	 * @see org.opentdc.events.ServiceProvider#register(java.lang.String, java.lang.String)
+	 */
+	@Override
+	public void register(
+			String id, 
+			String comment) 
+				throws NotFoundException,
+			ValidationException {
+		EventModel _event = read(id);
+		if (_event.getInvitationState() == InvitationState.INITIAL) {
+			throw new ValidationException("invitation <" + id + "> must be sent before being able to register");
+		}
+		if (_event.getInvitationState() == InvitationState.REGISTERED) {
+			logger.warning("invitation <" + id + "> is already registered; ignoring re-registration");
+		}
+		_event.setInvitationState(InvitationState.REGISTERED);
+		_event.setComment(comment);
+		_event.setModifiedAt(new Date());
+		_event.setModifiedBy(getPrincipal());
+		update(id, convert(_event, true));
+		logger.info("register(" + id + ", " + comment + ") -> " + PrettyPrinter.prettyPrintAsJSON(_event));
+	}
+
+	/* (non-Javadoc)
+	 * @see org.opentdc.events.ServiceProvider#deregister(java.lang.String, java.lang.String)
+	 */
+	@Override
+	public void deregister(String id, String comment) throws NotFoundException,
+			ValidationException {
+		EventModel _event = read(id);
+		if (_event.getInvitationState() == InvitationState.INITIAL) {
+			throw new ValidationException("invitation <" + id + "> must be sent before being able to deregister");
+		}
+		if (_event.getInvitationState() == InvitationState.EXCUSED) {
+			logger.warning("invitation <" + id + "> is already excused; ignoring deregistration");
+		}
+		_event.setInvitationState(InvitationState.EXCUSED);
+		_event.setComment(comment);
+		_event.setModifiedAt(new Date());
+		_event.setModifiedBy(getPrincipal());
+		update(id, convert(_event, true));
+		logger.info("deregister(" + id + ", " + comment + ") -> " + PrettyPrinter.prettyPrintAsJSON(_event));
 	}
 }
