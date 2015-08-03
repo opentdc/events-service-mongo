@@ -86,7 +86,6 @@ public class MongodbServiceProvider
 			.append("lastName", eventModel.getLastName())
 			.append("email", eventModel.getEmail())
 			.append("comment", eventModel.getComment())
-			.append("internalComment", eventModel.getInternalComment())
 			.append("contact",  eventModel.getContact())
 			.append("salutation", eventModel.getSalutation().toString())
 			.append("invitationState", eventModel.getInvitationState().toString())
@@ -102,13 +101,15 @@ public class MongodbServiceProvider
 	
 	private EventModel convert(Document doc)
 	{
+		if (doc == null) {
+			return null;
+		}
 		EventModel _model = new EventModel();
 		_model.setId(doc.getObjectId("_id").toString());
 		_model.setFirstName(doc.getString("firstName"));
 		_model.setLastName(doc.getString("lastName"));
 		_model.setEmail(doc.getString("email"));
 		_model.setComment(doc.getString("comment"));
-		_model.setComment(doc.getString("internalComment"));
 		_model.setContact(doc.getString("contact"));
 		_model.setSalutation(SalutationType.valueOf(doc.getString("salutation")));
 		_model.setInvitationState(InvitationState.valueOf(doc.getString("invitationState")));
@@ -146,10 +147,17 @@ public class MongodbServiceProvider
 		EventModel event) 
 	throws DuplicateException, ValidationException {
 		logger.info("create(" + PrettyPrinter.prettyPrintAsJSON(event) + ")");
-		if (event.getId() != null && !event.getId().isEmpty()) {
-			throw new ValidationException("event <" + event.getId() + "> contains an id generated on the client.");
+		if (event.getId() == null || event.getId().isEmpty()) {
+			event.setId(new ObjectId().toString());			
 		}
-		event.setId(new ObjectId().toString());
+		else {		// id set
+			if (convert(readOne(event.getId())) == null) {
+				throw new ValidationException("event <" + event.getId() + "> contains an id generated on the client.");									
+			}
+			else {
+				throw new DuplicateException("event <" + event.getId() + "> exists already.");				
+			}
+		}
 		// enforce mandatory fields
 		if (event.getFirstName() == null || event.getFirstName().length() == 0) {
 			throw new ValidationException("event must contain a valid firstName.");
@@ -237,7 +245,6 @@ public class MongodbServiceProvider
 		_event.setSalutation(event.getSalutation());
 		_event.setInvitationState(event.getInvitationState());
 		_event.setComment(event.getComment());
-		_event.setInternalComment(event.getInternalComment());
 		_event.setModifiedAt(new Date());
 		_event.setModifiedBy(getPrincipal());
 		update(id, convert(_event, true));
