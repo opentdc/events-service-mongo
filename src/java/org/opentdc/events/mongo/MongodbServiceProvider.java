@@ -25,12 +25,10 @@ package org.opentdc.events.mongo;
 
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.logging.Logger;
 
 import javax.servlet.ServletContext;
+import javax.servlet.http.HttpServletRequest;
 
 import org.bson.Document;
 import org.bson.types.ObjectId;
@@ -43,11 +41,11 @@ import org.opentdc.service.exception.DuplicateException;
 import org.opentdc.service.exception.InternalServerErrorException;
 import org.opentdc.service.exception.NotFoundException;
 import org.opentdc.service.exception.ValidationException;
-import org.opentdc.util.EmailSender;
-import org.opentdc.util.FreeMarkerConfig;
+// import org.opentdc.util.EmailSender;
+// import org.opentdc.util.FreeMarkerConfig;
 import org.opentdc.util.PrettyPrinter;
 
-import freemarker.template.Template;
+// import freemarker.template.Template;
 
 /**
  * A MongoDB-based implementation of the Events service.
@@ -59,8 +57,10 @@ public class MongodbServiceProvider
 	implements ServiceProvider 
 {
 	private static final Logger logger = Logger.getLogger(MongodbServiceProvider.class.getName());
+	/*
 	private EmailSender emailSender = null;
 	private static final String SUBJECT = "Einladung zum Arbalo Launch Event";
+	*/
 
 	/**
 	 * Constructor.
@@ -75,8 +75,8 @@ public class MongodbServiceProvider
 		connect();
 		collectionName = prefix;
 		getCollection(collectionName);
-		new FreeMarkerConfig(context);
-		emailSender = new EmailSender(context);
+		// new FreeMarkerConfig(context);
+		// emailSender = new EmailSender(context);
 		logger.info("MongodbServiceProvider(context, " + prefix + ") -> OK");
 	}
 	
@@ -129,6 +129,9 @@ public class MongodbServiceProvider
 		String query,
 		int position,
 		int size) {
+		logger.warning("EventsService.list() should not be called; returning empty list");
+		return new ArrayList<EventModel>();
+		/*
 		List<Document> _docs = list(position, size);
 		ArrayList<EventModel> _selection = new ArrayList<EventModel>();
 		for (Document doc : _docs) {
@@ -137,6 +140,7 @@ public class MongodbServiceProvider
 		logger.info("list(<" + query + ">, <" + queryType + 
 				">, <" + position + ">, <" + size + ">) -> " + _selection.size() + " events.");
 		return _selection;
+		*/
 	}
 
 	/* (non-Javadoc)
@@ -146,6 +150,11 @@ public class MongodbServiceProvider
 	public EventModel create(
 		EventModel event) 
 	throws DuplicateException, ValidationException {
+		logger.warning("EventsService.create() should not be called; returning the same EventModel");
+		logger.info("create(" + PrettyPrinter.prettyPrintAsJSON(event) + ")");
+		return event;
+
+		/*
 		logger.info("create(" + PrettyPrinter.prettyPrintAsJSON(event) + ")");
 		if (event.getId() == null || event.getId().isEmpty()) {
 			event.setId(new ObjectId().toString());			
@@ -185,6 +194,7 @@ public class MongodbServiceProvider
 		create(convert(event, true));
 		logger.info("create(" + PrettyPrinter.prettyPrintAsJSON(event) + ")");
 		return event;
+		*/
 	}
 
 	/* (non-Javadoc)
@@ -208,10 +218,13 @@ public class MongodbServiceProvider
 	 */
 	@Override
 	public EventModel update(
+		HttpServletRequest request,
 		String id, 
 		EventModel event
 	) throws NotFoundException, ValidationException {
 		EventModel _event = read(id);
+		
+		/*
 		if (! _event.getCreatedAt().equals(event.getCreatedAt())) {
 			logger.warning("event <" + id + ">: ignoring createdAt value <" + event.getCreatedAt().toString() + 
 					"> because it was set on the client.");
@@ -232,9 +245,11 @@ public class MongodbServiceProvider
 			throw new ValidationException("event <" + id + 
 					"> must contain a valid email address.");
 		}
+		*/
 		if (event.getInvitationState() == null) {
 			event.setInvitationState(InvitationState.INITIAL);
 		}
+		/*
 		if (event.getSalutation() == null) {
 			event.setSalutation(SalutationType.DU_M);
 		}
@@ -243,10 +258,11 @@ public class MongodbServiceProvider
 		_event.setEmail(event.getEmail());
 		_event.setContact(event.getContact());
 		_event.setSalutation(event.getSalutation());
+		*/
 		_event.setInvitationState(event.getInvitationState());
 		_event.setComment(event.getComment());
 		_event.setModifiedAt(new Date());
-		_event.setModifiedBy(getPrincipal());
+		_event.setModifiedBy(getPrincipal(request));
 		update(id, convert(_event, true));
 		logger.info("update(" + id + ") -> " + PrettyPrinter.prettyPrintAsJSON(_event));
 		return _event;
@@ -259,9 +275,12 @@ public class MongodbServiceProvider
 	public void delete(
 		String id) 
 	throws NotFoundException, InternalServerErrorException {
+		logger.warning("EventsService.delete(" + id + ") should not be called; ignoring it");
+		/*
 		read(id);
 		deleteOne(id);
 		logger.info("delete(" + id + ") -> OK");
+		*/
 	}
 
 	/* (non-Javadoc)
@@ -270,6 +289,10 @@ public class MongodbServiceProvider
 	@Override
 	public String getMessage(String id) throws NotFoundException,
 			InternalServerErrorException {
+		String _msg = "EventsService.getMessage(" + id + ") should not be called; use InvitationsService instead";
+		logger.warning(_msg);
+
+		/*
 		logger.info("getMessage(" + id + ")");
 		EventModel _model = read(id);
 		
@@ -282,6 +305,7 @@ public class MongodbServiceProvider
         		_root, 
         		getTemplate(_model.getSalutation(), _model.getContact()));
 		logger.info("getMessage(" + id + ") -> " + _msg);
+		*/
 		return _msg;
 	}
 	
@@ -290,6 +314,7 @@ public class MongodbServiceProvider
 	 * @param contactName the name of the contact
 	 * @return the corresponding email address
 	 */
+	/*
 	private String getEmailAddress(String contactName) {
 		logger.info("getEmailAddress(" + contactName + ")");
 		String _emailAddress = null;
@@ -312,11 +337,13 @@ public class MongodbServiceProvider
 	        logger.info("getEmailAddress(" + contactName + ") -> " + _emailAddress);
 	        return _emailAddress;	
 	}
+	*/
 	
 	/**
 	 * @param salutation
 	 * @return
 	 */
+	/*
 	private Template getTemplate(
 			SalutationType salutation, String contactName) {
 		String _templateName = null;
@@ -331,6 +358,7 @@ public class MongodbServiceProvider
 		}
 		return FreeMarkerConfig.getTemplateByName(_templateName);
 	}
+	*/
 
 	/* (non-Javadoc)
 	 * @see org.opentdc.events.ServiceProvider#sendMessage(java.lang.String)
@@ -339,6 +367,9 @@ public class MongodbServiceProvider
 	public void sendMessage(
 			String id) 
 			throws NotFoundException, InternalServerErrorException {
+		logger.warning("EventsService.sendMessage(" + id + ") should not be called; ignoring it");
+		
+		/*
 		logger.info("sendMessage(" + id + ")");
 		EventModel _model = read(id);
 
@@ -351,6 +382,7 @@ public class MongodbServiceProvider
 		_model.setId(null);
 		_model.setInvitationState(InvitationState.SENT);
 		update(id, _model);
+		*/
 	}
 
 	/* (non-Javadoc)
@@ -359,6 +391,8 @@ public class MongodbServiceProvider
 	@Override
 	public void sendAllMessages() 
 			throws InternalServerErrorException {
+		logger.warning("EventsService.sendAllMessages() should not be called; ignoring it");
+		/*
 		logger.info("sendAllMessages()");
 		EventModel _model = null;
 		String _id = null;
@@ -381,6 +415,7 @@ public class MongodbServiceProvider
 				throw new InternalServerErrorException(_ex.getMessage());
 			}
 		}
+		*/
 	}
 
 	/* (non-Javadoc)
@@ -388,6 +423,7 @@ public class MongodbServiceProvider
 	 */
 	@Override
 	public void register(
+			HttpServletRequest request,
 			String id, 
 			String comment) 
 				throws NotFoundException,
@@ -402,7 +438,7 @@ public class MongodbServiceProvider
 		_event.setInvitationState(InvitationState.REGISTERED);
 		_event.setComment(comment);
 		_event.setModifiedAt(new Date());
-		_event.setModifiedBy(getPrincipal());
+		_event.setModifiedBy(getPrincipal(request));
 		update(id, convert(_event, true));
 		logger.info("register(" + id + ", " + comment + ") -> " + PrettyPrinter.prettyPrintAsJSON(_event));
 	}
@@ -411,7 +447,10 @@ public class MongodbServiceProvider
 	 * @see org.opentdc.events.ServiceProvider#deregister(java.lang.String, java.lang.String)
 	 */
 	@Override
-	public void deregister(String id, String comment) throws NotFoundException,
+	public void deregister(
+			HttpServletRequest request,
+			String id, 
+			String comment) throws NotFoundException,
 			ValidationException {
 		EventModel _event = read(id);
 		if (_event.getInvitationState() == InvitationState.INITIAL) {
@@ -423,7 +462,7 @@ public class MongodbServiceProvider
 		_event.setInvitationState(InvitationState.EXCUSED);
 		_event.setComment(comment);
 		_event.setModifiedAt(new Date());
-		_event.setModifiedBy(getPrincipal());
+		_event.setModifiedBy(getPrincipal(request));
 		update(id, convert(_event, true));
 		logger.info("deregister(" + id + ", " + comment + ") -> " + PrettyPrinter.prettyPrintAsJSON(_event));
 	}
