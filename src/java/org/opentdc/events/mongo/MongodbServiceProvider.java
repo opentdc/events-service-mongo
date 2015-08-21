@@ -125,8 +125,8 @@ public class MongodbServiceProvider
 	 */
 	@Override
 	public ArrayList<EventModel> list(
-		String queryType,
 		String query,
+		String queryType,
 		int position,
 		int size) {
 		logger.warning("EventsService.list() should not be called; returning empty list");
