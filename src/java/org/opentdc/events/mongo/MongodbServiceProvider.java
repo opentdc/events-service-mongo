@@ -37,6 +37,7 @@ import org.opentdc.events.EventModel;
 import org.opentdc.events.InvitationState;
 import org.opentdc.events.SalutationType;
 import org.opentdc.events.ServiceProvider;
+import org.opentdc.service.ServiceUtil;
 import org.opentdc.service.exception.DuplicateException;
 import org.opentdc.service.exception.InternalServerErrorException;
 import org.opentdc.service.exception.NotFoundException;
@@ -262,7 +263,7 @@ public class MongodbServiceProvider
 		_event.setInvitationState(event.getInvitationState());
 		_event.setComment(event.getComment());
 		_event.setModifiedAt(new Date());
-		_event.setModifiedBy(getPrincipal(request));
+		_event.setModifiedBy(ServiceUtil.getPrincipal(request));
 		update(id, convert(_event, true));
 		logger.info("update(" + id + ") -> " + PrettyPrinter.prettyPrintAsJSON(_event));
 		return _event;
@@ -438,7 +439,7 @@ public class MongodbServiceProvider
 		_event.setInvitationState(InvitationState.REGISTERED);
 		_event.setComment(comment);
 		_event.setModifiedAt(new Date());
-		_event.setModifiedBy(getPrincipal(request));
+		_event.setModifiedBy(ServiceUtil.getPrincipal(request));
 		update(id, convert(_event, true));
 		logger.info("register(" + id + ", " + comment + ") -> " + PrettyPrinter.prettyPrintAsJSON(_event));
 	}
@@ -462,7 +463,7 @@ public class MongodbServiceProvider
 		_event.setInvitationState(InvitationState.EXCUSED);
 		_event.setComment(comment);
 		_event.setModifiedAt(new Date());
-		_event.setModifiedBy(getPrincipal(request));
+		_event.setModifiedBy(ServiceUtil.getPrincipal(request));
 		update(id, convert(_event, true));
 		logger.info("deregister(" + id + ", " + comment + ") -> " + PrettyPrinter.prettyPrintAsJSON(_event));
 	}
